@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WPU Online Station Handy Daily Time Record</title>
+    <link rel="manifest" href="manifest.json" />
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="icon" type="image/png" sizes="32x32" href="img/icons/icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="img/icons/icon-512x512.png">
+    <meta name="theme-color" content="#3498db" />
+    <meta http-equiv="Feature-Policy" content="camera *">
+    <link rel="stylesheet" href="css/fontawesome/all.min.css" />
+</head>
+<body>
+    <div class="app-container">
+        <!-- App Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="brand">
+                    <img src="img/icons/favicon-32x32.png" alt="WPU Logo" class="logo">
+                    <h1>WPU OSH-DTR</h1>
+                </div>
+                
+                <div class="auth-section">
+                    <button id="login-btn" class="auth-btn">
+                        <i class="fas fa-sign-in-alt"></i>
+                        <span>Sign in</span>
+                    </button>
+                    
+                    <div id="user-panel" class="hidden">
+                        <div class="user-info">
+                            <div class="user-avatar">
+                                <i class="fas fa-user-circle"></i>
+                            </div>
+                            <span id="user-email"></span>
+                            <button id="logout-btn">
+                                <i class="fas fa-sign-out-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Network status banner -->
+            <div id="network-status" class="network-banner online">
+                <i class="fas fa-wifi"></i>
+                <span>Online</span>
+            </div>
+        </header>
+
+        <main class="app-content">
+            <!-- Tab navigation -->
+            <div class="workflow-tabs">
+                <button class="tab-btn" data-target="scan-tab">
+                    <i class="fas fa-qrcode"></i>
+                    <span>Scan QR</span>
+                </button>
+                <button class="tab-btn" data-target="employee-tab">
+                    <i class="fas fa-user"></i>
+                    <span>Employee</span>
+                </button>
+                <button class="tab-btn" data-target="history-tab">
+                    <i class="fas fa-history"></i>
+                    History
+                    <span id="pending-records-count" class="badge-counter">0</span>
+                </button>
+            </div>
+            
+            <!-- Tab contents -->
+            <div id="scan-tab" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-qrcode"></i> Scan QR Code</h2>
+                    </div>
+                    <div id="scanner-container">
+                        <video id="scanner-preview"></video>
+                        <div id="scanner-placeholder">
+                            <div id="scanner-target">
+                                <span></span>
+                            </div>
+                            <div id="scanner-instructions">Center the QR code in the frame</div>
+                        </div>
+                    </div>
+                    <div class="scanner-controls">
+                        <button id="toggle-flash" class="icon-btn">
+                            <i class="fas fa-bolt"></i>
+                        </button>
+                        <button id="switch-camera" class="icon-btn">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="status-card">
+                    <div id="status-message" class="info"></div>
+                </div>
+                <!-- Status message container -->
+                <div id="status-message" style="display: none;"></div>
+            </div>
+            
+            <!-- Employee Tab -->
+            <div id="employee-tab" class="tab-content">
+                <div class="card employee-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-user"></i> Employee Details</h2>
+                    </div>
+                    <div class="employee-details">
+                        <!-- Will be populated by JavaScript after scanning -->
+                    </div>
+                    <div id="action-container">
+                        <h3>Select Action</h3>
+                        <!-- Add this line for the hint -->
+                        <div id="action-hint" class="hint-text"></div>
+                        <div class="action-options">
+                            <div class="action-option">
+                                <input type="radio" name="time-action" id="time-in" value="IN">
+                                <label for="time-in">
+                                    <i class="fas fa-sign-in-alt"></i>
+                                    Time In
+                                </label>
+                            </div>
+                            <div class="action-option">
+                                <input type="radio" name="time-action" id="lunch-out" value="LOUT">
+                                <label for="lunch-out">
+                                    <i class="fas fa-utensils"></i>
+                                    Lunch Out
+                                </label>
+                            </div>
+                            <div class="action-option">
+                                <input type="radio" name="time-action" id="lunch-in" value="LIN">
+                                <label for="lunch-in">
+                                    <i class="fas fa-utensils"></i>
+                                    Lunch In
+                                </label>
+                            </div>
+                            <div class="action-option">
+                                <input type="radio" name="time-action" id="time-out" value="OUT">
+                                <label for="time-out">
+                                    <i class="fas fa-sign-out-alt"></i>
+                                    Time Out
+                                </label>
+                            </div>
+                            <div class="action-option">
+                                <input type="radio" name="time-action" id="univ-activity" value="UA">
+                                <label for="univ-activity">
+                                    <i class="fas fa-university"></i>
+                                    University Activity
+                                </label>
+                            </div>
+                        </div>
+                        <div class="action-buttons">
+                            <button class="btn-primary">
+                                <i class="fas fa-check"></i> Submit
+                            </button>
+                            <button class="btn-secondary" id="scan-again-btn">
+                                <i class="fas fa-redo"></i> Scan Again
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- History Tab -->
+            <div id="history-tab" class="tab-content">
+                <div class="card history-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-history"></i> Attendance History</h2>
+                    </div>
+                    
+                    <div class="history-controls">
+                        <div class="filter-options">
+                            <div class="data-source-toggle">
+                                <button id="local-records-btn" class="toggle-btn active">My Records</button>
+                                <button id="org-records-btn" class="toggle-btn">All WPU Records</button>
+                                <button id="refresh-org-btn" class="btn-icon" title="Refresh Organization Records">
+                                    <i class="fas fa-sync"></i>
+                                </button>
+                            </div>
+                            <span id="last-refresh-time" class="refresh-time">Last updated: --:--:--</span>
+                            <select id="history-filter">
+                                <option value="all">All Records</option>
+                                <option value="pending">Pending Only</option>
+                                <option value="synced">Synced Only</option>
+                                <option value="today">Today</option>
+                                <option value="week">This Week</option>
+                            </select>
+                            
+                            <button id="sync-all-btn" class="btn-secondary">
+                                <i class="fas fa-sync"></i> Sync All Pending
+                                <span id="pending-count-badge" class="mini-badge">0</span>
+                            </button>
+                        </div>
+                        
+                        <div class="search-container">
+                            <input type="text" id="history-search" placeholder="Search...">
+                            <button id="clear-search" class="icon-btn clear-btn" title="Clear search">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="history-content">
+                        <div id="history-loading" class="history-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Loading records...</p>
+                        </div>
+                        
+                        <div id="history-empty" class="history-state hidden">
+                            <i class="fas fa-inbox"></i>
+                            <p>No attendance records found.</p>
+                        </div>
+                        
+                        <div id="history-org-notice" class="history-state hidden">
+                            <i class="fas fa-globe"></i>
+                            <p>Showing university-wide records. <a href="#" id="show-local-only">Show my records only</a></p>
+                        </div>
+                        
+                        <table id="history-table" class="hidden">
+                            <thead>
+                                <tr>
+                                    <th>Date & Time</th>
+                                    <th>Name</th>
+                                    <th>Action</th>
+                                    <th>Status</th>
+                                    <th>Source</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-records">
+                                <!-- Records will be inserted here by JavaScript -->
+                            </tbody>
+                        </table>
+                        
+                        <div id="load-more-container" class="load-more-container hidden">
+                            <button id="load-more-btn" class="btn-secondary">
+                                <i class="fas fa-arrow-down"></i> Load More Records
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="history-pagination">
+                        <button id="prev-page" class="pagination-btn" disabled>
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </button>
+                        <span id="page-indicator">Page 1</span>
+                        <button id="next-page" class="pagination-btn" disabled>
+                            Next <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Login Modal -->
+        <div id="login-modal" class="modal hidden">
+            <div class="modal-content">
+                <button class="close-modal">&times;</button>
+                <div class="modal-header">
+                    <i class="fas fa-id-card modal-icon"></i>
+                    <h2>WPU Authentication</h2>
+                </div>
+                <p>Please sign in with your WPU Google account to submit attendance records.</p>
+                <button id="google-signin-btn" class="google-btn">
+                    <i class="fab fa-google"></i>
+                    <span>Sign in with Google</span>
+                </button>
+                <div id="login-error" class="hidden"></div>
+            </div>
+        </div>
+
+        <!-- Record Details Modal (for history records) -->
+        <div id="record-details-modal" class="modal hidden">
+            <div class="modal-content">
+                <button class="close-modal">&times;</button>
+                <div class="modal-header">
+                    <i class="fas fa-id-badge modal-icon"></i>
+                    <h2>Record Details</h2>
+                </div>
+                <div class="record-details">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+                <div class="modal-actions">
+                    <button id="sync-record-btn" class="btn-primary">
+                        <i class="fas fa-sync"></i> Sync Now
+                    </button>
+                    <button id="close-details-btn" class="btn-secondary">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="js/zxing.min.js"></script>
+    <script src="js/firebase-config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/db.js"></script>
+    <script src="js/sheets-api.js"></script>
+    <script src="js/qr-scanner.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        if ("serviceWorker" in navigator) {
+          window.addEventListener("load", () => {
+            navigator.serviceWorker
+              .register("./service-worker.js")
+              .then((registration) => {
+                console.log("Service Worker registered with scope:", registration.scope);
+              })
+              .catch((error) => {
+                console.error("Service Worker registration failed:", error);
+              });
+          });
+        }
+    </script>
+    
+</body>
+</html>

@@ -351,13 +351,13 @@ function setupNetworkStatusDetection() {
             .catch(() => {
                 // Failed to fetch - we might be offline or server is down
                 networkStatus.className = 'network-banner offline';
-                networkIcon.className = 'fas fa-wifi-slash';
+                networkIcon.className = 'fas fa-wifi';
                 networkText.textContent = 'Limited Connectivity';
             });
         } else {
             // Navigator says we're offline
             networkStatus.className = 'network-banner offline';
-            networkIcon.className = 'fas fa-wifi-slash';
+            networkIcon.className = 'fas fa-wifi';
             networkText.textContent = 'Offline';
         }
         

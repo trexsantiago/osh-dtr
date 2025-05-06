@@ -31,12 +31,35 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Start with scan tab active by default
     activateTab('scan-tab');
+
+    // Check for pending records on startup and notify user
+    try {
+        const pendingCount = await DB.getPendingCount();
+        if (pendingCount > 0) {
+            // Only show after a short delay so user can see app has loaded
+            setTimeout(() => {
+                if (navigator.onLine) {
+                    // Online - can sync now
+                    const currentUser = firebase.auth().currentUser;
+                    if (currentUser) {
+                        showStatus(`You have ${pendingCount} pending record${pendingCount > 1 ? 's' : ''} waiting to sync. Go to History tab to sync them.`, 'info', true);
+                    } else {
+                        showStatus(`You have ${pendingCount} pending record${pendingCount > 1 ? 's' : ''} waiting to sync. Please sign in to upload to the server.`, 'info', true);
+                    }
+                } else {
+                    // Offline - will sync later
+                    showStatus(`You have ${pendingCount} pending record${pendingCount > 1 ? 's' : ''}. You can upload them in the History tab when online.`, 'info', true);
+                }
+            }, 1500);
+        }
+    } catch (err) {
+        console.error('Error checking pending records on startup:', err);
+    }
 });
 
 // Set up tab navigation
 function setupTabNavigation() {
     const tabButtons = document.querySelectorAll('.tab-btn');
-    const scanAgainBtn = document.getElementById('scan-again-btn');
     
     // Add event listeners to tab buttons
     tabButtons.forEach(btn => {
@@ -45,13 +68,6 @@ function setupTabNavigation() {
             activateTab(targetTab);
         });
     });
-    
-    // Add event listener for the Scan Again button
-    if (scanAgainBtn) {
-        scanAgainBtn.addEventListener('click', function() {
-            activateTab('scan-tab');
-        });
-    }
 }
 
 // Set up form submission handlers
@@ -78,12 +94,11 @@ function activateTab(tabId) {
     
     // Handle camera based on active tab
     if (tabId === 'scan-tab') {
-        // Reset any form inputs in employee tab
-        const timeActions = document.querySelectorAll('input[name="time-action"]');
-        timeActions.forEach(radio => radio.checked = false);
-        
         // Start the scanner
         window.QrScanner.startScanner();
+        
+        // Hide employee section when switching to scan tab
+        hideEmployeeSection();
     } else {
         window.QrScanner.stopScanner();
     }
@@ -127,11 +142,11 @@ window.processQrCode = function(qrData) {
                 // Show success message
                 showStatus(`Successfully scanned: ${firstname} ${lastname}`, 'success');
                 
-                // Display the employee data in the employee tab
+                // Display the employee data in the integrated employee section
                 displayEmployeeData(lastname, firstname);
                 
-                // Switch to the employee tab
-                activateTab('employee-tab');
+                // Show the employee section and scroll to it
+                showEmployeeSection();
             } else {
                 showStatus('Invalid QR code format: Missing name parameters', 'error');
                 // Restart scanner after error
@@ -148,6 +163,28 @@ window.processQrCode = function(qrData) {
         window.QrScanner.startScanner();
     }
 };
+
+// Updated function to show the employee section
+function showEmployeeSection() {
+    const employeeSection = document.getElementById('employee-section');
+    
+    if (employeeSection) {
+        // Show the section
+        employeeSection.classList.remove('hidden');
+        employeeSection.classList.add('slide-in');
+        
+        // Scroll to the employee section
+        setTimeout(() => {
+            employeeSection.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+        }, 100);
+        
+        // Use the unified time-based action selection
+        selectActionBasedOnTime();
+    }
+}
 
 // Display employee data in the employee tab
 function displayEmployeeData(lastname, firstname) {
@@ -169,21 +206,12 @@ function displayEmployeeData(lastname, firstname) {
             hour12: true
         });
         
-        // Update the employee info table with simplified details
+        // Update the employee info with a simplified layout
         employeeDetails.innerHTML = `
-            <div class="employee-photo">
-                <i class="fas fa-user"></i>
+            <div class="employee-info">
+                <h4>${firstname} ${lastname}</h4>
+                <p>${formattedDate} at ${formattedTime}</p>
             </div>
-            <table>
-                <tr>
-                    <th>Name:</th>
-                    <td>${firstname} ${lastname}</td>
-                </tr>
-                <tr>
-                    <th>Date & Time:</th>
-                    <td>${formattedDate}<br>${formattedTime}</td>
-                </tr>
-            </table>
         `;
         
         // Store employee data for later submission
@@ -194,9 +222,6 @@ function displayEmployeeData(lastname, firstname) {
             scanTime: formattedTime,
             timestamp: now.toISOString()
         };
-        
-        // Pre-select appropriate action based on time of day
-        suggestTimeAction(now);
     }
 }
 
@@ -225,7 +250,7 @@ function suggestTimeAction(dateTime) {
     }
 }
 
-// Handle attendance record submission
+// Modified submitAttendanceRecord function with adjusted notifications
 async function submitAttendanceRecord() {
     // Check if we have employee data
     if (!currentEmployeeData) {
@@ -242,7 +267,7 @@ async function submitAttendanceRecord() {
     
     // Get action details
     const actionType = selectedAction.value;
-    const actionLabel = document.querySelector(`label[for="${selectedAction.id}"]`).textContent.trim();
+    const actionLabel = document.querySelector(`label[for="${selectedAction.id}"]`).getAttribute('title');
     
     // Create the record object for submission
     const record = {
@@ -250,66 +275,77 @@ async function submitAttendanceRecord() {
         lastName: currentEmployeeData.lastName,
         timestamp: currentEmployeeData.timestamp,
         action: actionType,
-        actionLabel: actionLabel
+        actionLabel: actionLabel,
+        syncStatus: 'pending' // All records start as pending
     };
     
-    // Check if user is logged in
-    if (!firebase.auth().currentUser) {
-        // Show login modal if available
-        const loginModal = document.getElementById('login-modal');
-        if (loginModal) {
-            loginModal.classList.remove('hidden');
-            setTimeout(() => {
-                loginModal.classList.add('visible');
-            }, 10);
-        }
-        showStatus('Please log in to submit attendance records', 'info');
-        return;
-    }
-    
-    // Show loading state
-    showStatus('Saving attendance record...', 'info');
+    // Show initial loading state
+    showStatus('Processing...', 'info');
     
     try {
-        console.log('Saving record:', record);
-        // First save record locally to IndexedDB
+        console.log('Saving record locally:', record);
+        // First save record locally to IndexedDB (without requiring authentication)
         const savedRecord = await DB.saveRecord(record);
         console.log('Record saved locally:', savedRecord);
 
         // Update pending counter after saving a record
         await updatePendingRecordsCounter();
         
-        showStatus('Record saved locally', 'info');
-        
-        // Check if we're online and can sync immediately
+        // Check if we're online
         if (navigator.onLine) {
-            try {
-                showStatus('Syncing with Google Sheets...', 'info');
+            // Only try to sync if authenticated
+            const currentUser = firebase.auth().currentUser;
+            
+            if (currentUser) {
+                try {
+                    showStatus('Uploading to server...', 'info');
+                    
+                    // Try to sync with Google Sheets
+                    console.log('Attempting to sync record:', savedRecord);
+                    const syncResult = await SheetsAPI.submitAttendance(savedRecord);
+                    console.log('Sync result:', syncResult);
+                    
+                    // Update sync status in local DB
+                    await DB.updateSyncStatus(savedRecord.id, 'synced');
+                    
+                    // Only show a success message about successful sync
+                    showStatus(`${actionLabel} recorded and uploaded successfully for ${record.firstName} ${record.lastName}`, 'success', true);
+                } catch (syncError) {
+                    console.error('Error syncing record:', syncError);
+                    showStatus('Record saved locally but upload failed: ' + syncError.message, 'warning', true);
+                }
+            } else {
+                // Online but not authenticated - directly show login modal without "saved locally" message
+                // Just show login modal directly (with small delay so message is seen first)
+                setTimeout(() => {
+                    const loginModal = document.getElementById('login-modal');
+                    if (loginModal) {
+                        loginModal.classList.remove('hidden');
+                        setTimeout(() => {
+                            loginModal.classList.add('visible');
+                        }, 10);
+                    }
+                }, 500);
                 
-                // Try to sync with Google Sheets
-                console.log('Attempting to sync record:', savedRecord);
-                const syncResult = await SheetsAPI.submitAttendance(savedRecord);
-                console.log('Sync result:', syncResult);
-                
-                // Update sync status in local DB
-                await DB.updateSyncStatus(savedRecord.id, 'synced');
-                
-                showStatus(`${actionLabel} recorded and synced successfully for ${record.firstName} ${record.lastName}`, 'success', true);
-            } catch (syncError) {
-                console.error('Error syncing record:', syncError);
-                showStatus('Record saved locally but sync failed: ' + syncError.message, 'warning', true);
+                // Update status but don't mention local save
+                showStatus(`${actionLabel} recorded for ${record.firstName} ${record.lastName}. Please sign in to upload.`, 'info');
             }
         } else {
-            showStatus(`Record saved locally. Will sync when online.`, 'info');
+            // Only mention local saving when we're offline
+            showStatus(`${actionLabel} recorded for ${record.firstName} ${record.lastName}. Will upload when online.`, 'info');
         }
         
-        // Go back to scan tab after short delay
+        // Reset after successful submission
         setTimeout(() => {
-            activateTab('scan-tab');
+            hideEmployeeSection();
+            resetScan();
         }, 2000);
+        
+        return savedRecord;
     } catch (error) {
         console.error('Error saving record:', error);
         showStatus(`Failed to save record: ${error.message}`, 'error');
+        throw error;
     }
 }
 
@@ -319,63 +355,16 @@ function setupNetworkStatusDetection() {
     const networkIcon = networkStatus.querySelector('i');
     const networkText = networkStatus.querySelector('span');
 
-    // Function to update network status UI
-    function updateNetworkStatus() {
-        // Basic check using navigator.onLine
-        const isOnline = navigator.onLine;
-        
-        if (isOnline) {
-            // If navigator.onLine says we're online, verify with a fetch
-            fetch('https://www.google.com/favicon.ico', { 
-                mode: 'no-cors',
-                cache: 'no-store',
-                method: 'HEAD',
-                timeout: 2000
-            })
-            .then(() => {
-                // Successfully fetched - we're definitely online
-                networkStatus.className = 'network-banner online';
-                networkIcon.className = 'fas fa-wifi';
-                networkText.textContent = 'Online';
-                
-                // Try to sync pending records when we come back online
-                syncPendingRecords()
-                    .then(() => {
-                        // Update pending counter after online sync attempt
-                        return updatePendingRecordsCounter();
-                    })
-                    .catch(error => {
-                        console.error('Error syncing pending records:', error);
-                    });
-            })
-            .catch(() => {
-                // Failed to fetch - we might be offline or server is down
-                networkStatus.className = 'network-banner offline';
-                networkIcon.className = 'fas fa-wifi';
-                networkText.textContent = 'Limited Connectivity';
-            });
-        } else {
-            // Navigator says we're offline
-            networkStatus.className = 'network-banner offline';
-            networkIcon.className = 'fas fa-wifi';
-            networkText.textContent = 'Offline';
-        }
-        
-        // Update app behavior based on network status
-        if (navigator.onLine) {
-            document.body.classList.remove('app-offline');
-            enableOnlineFeatures();
-        } else {
-            document.body.classList.add('app-offline');
-            disableOnlineFeatures();
-        }
+    // Initial status check
+    updateNetworkStatus();
 
-        // Using the global showStatus function
-        if (!navigator.onLine) {
-            showStatus('You are currently offline. Some features may not work.', 'warning');
-        }
-    }
+    // Add event listeners for network status changes
+    window.addEventListener('online', updateNetworkStatus);
+    window.addEventListener('offline', updateNetworkStatus);
 
+    // Add periodic check for more reliable detection
+    setInterval(updateNetworkStatus, 5000);
+    
     function enableOnlineFeatures() {
         // Enable buttons that require internet
         const onlineButtons = document.querySelectorAll('.requires-connection');
@@ -390,16 +379,116 @@ function setupNetworkStatusDetection() {
         // Show offline message if needed
         showStatus('You are currently offline. Some features may not work.', 'warning');
     }
+}
 
-    // Initial status check
-    updateNetworkStatus();
-
-    // Add event listeners for network status changes
-    window.addEventListener('online', updateNetworkStatus);
-    window.addEventListener('offline', updateNetworkStatus);
-
-    // Add periodic check for more reliable detection
-    setInterval(updateNetworkStatus, 5000);
+// Simplified network status indicator - showing only network status, no pending info
+async function updateNetworkStatus() {
+  const networkStatus = document.getElementById('network-status');
+  const networkText = networkStatus.querySelector('span');
+  const networkIcon = networkStatus.querySelector('i');
+  
+  // Add transition effect when status changes
+  const currentClass = networkStatus.className;
+  
+  // Check connection
+  const isOnline = navigator.onLine;
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  
+  // Get effective connection speed if available
+  let connectionSpeed = 'unknown';
+  if (connection) {
+    connectionSpeed = connection.effectiveType || 'unknown';
+  }
+  
+  // Add status-changing class for animation
+  networkStatus.classList.add('status-changing');
+  
+  // Remove any existing signal strength indicator
+  const existingSignal = networkStatus.querySelector('.signal-strength');
+  if (existingSignal) {
+    networkStatus.removeChild(existingSignal);
+  }
+  
+  try {
+    if (!isOnline) {
+      // Offline status - simple indicator with no pending info
+      networkStatus.className = 'network-banner offline status-changing';
+      networkIcon.className = 'fas fa-ban';
+      networkText.textContent = 'Offline';
+    } else if (connection && (connectionSpeed === 'slow-2g' || connectionSpeed === '2g')) {
+      // Limited connectivity
+      networkStatus.className = 'network-banner limited status-changing';
+      networkIcon.className = 'fas fa-exclamation-triangle';
+      networkText.textContent = 'Limited Connectivity';
+      
+      // Add signal strength indicator
+      const signalStrength = document.createElement('div');
+      signalStrength.className = 'signal-strength';
+      networkStatus.appendChild(signalStrength);
+    } else {
+      // Online with good connection - simple indicator with no pending info
+      networkStatus.className = 'network-banner online status-changing';
+      networkIcon.className = 'fas fa-wifi';
+      
+      // Show connection quality if available
+      if (connectionSpeed && connectionSpeed !== 'unknown') {
+        if (connectionSpeed === '4g') {
+          networkText.textContent = 'Online (Excellent)';
+        } else if (connectionSpeed === '3g') {
+          networkText.textContent = 'Online (Good)';
+        } else {
+          networkText.textContent = 'Online';
+        }
+      } else {
+        networkText.textContent = 'Online';
+      }
+    }
+    
+    // Check for pending records and update UI (without showing in network banner)
+    // This is necessary to show notifications in the message box
+    try {
+      const pendingCount = await DB.getPendingCount();
+      
+      // If coming back online, show notification about pending records in message box
+      if (pendingCount > 0 && isOnline && currentClass.includes('offline')) {
+        const currentUser = firebase.auth().currentUser;
+        
+        if (currentUser) {
+          showStatus(`You have ${pendingCount} pending record${pendingCount > 1 ? 's' : ''}. Go to History tab to upload them.`, 'info', true);
+        } else {
+          showStatus(`You have ${pendingCount} pending record${pendingCount > 1 ? 's' : ''}. Sign in and visit the History tab to upload them.`, 'info', true);
+        }
+      }
+      
+      // Update badge in History tab (still needed)
+      await updatePendingRecordsCounter();
+    } catch(err) {
+      console.error('Error getting pending count:', err);
+    }
+    
+    // Update app behavior based on network status
+    if (isOnline) {
+      document.body.classList.remove('app-offline');
+      
+      // Enable buttons that require internet
+      const onlineButtons = document.querySelectorAll('.requires-connection');
+      onlineButtons.forEach(btn => btn.disabled = false);
+    } else {
+      document.body.classList.add('app-offline');
+      
+      // Disable buttons that require internet
+      const onlineButtons = document.querySelectorAll('.requires-connection');
+      onlineButtons.forEach(btn => btn.disabled = true);
+      
+      // Show offline message if needed
+      showStatus('You are currently offline. Some features may not work.', 'warning');
+    }
+  } finally {
+    // Remove animation class after transition
+    setTimeout(() => {
+      networkStatus.classList.remove('status-changing');
+    }, 800);
+  }
 }
 
 // Add this function to sync pending records
@@ -495,8 +584,8 @@ window.showStatus = function(message, type = 'info', persistent = false) {
     }
 };
 
-// Add this function to automatically select action based on time of day
-function preSelectActionBasedOnTime() {
+// Unified function for auto-selecting action based on time
+function selectActionBasedOnTime() {
   const now = new Date();
   const hour = now.getHours(); // 24-hour format (0-23)
   
@@ -517,7 +606,6 @@ function preSelectActionBasedOnTime() {
   // Select based on time of day
   let selectedAction = '';
   
-  // These time ranges can be adjusted based on your organization's schedule
   if (hour >= 7 && hour < 12) {
     // Morning (7:00 AM - 11:59 AM) - Typically Time In
     if (timeInBtn) {
@@ -537,7 +625,7 @@ function preSelectActionBasedOnTime() {
       selectedAction = 'Lunch In';
     }
   } else if (hour >= 15 && hour <= 22){
-    // Afternoon/Evening (3:00 PM - 6:00 PM) - Typically Time Out
+    // Afternoon/Evening (3:00 PM - 10:00 PM) - Typically Time Out
     if (timeOutBtn) {
       timeOutBtn.checked = true;
       selectedAction = 'Time Out';
@@ -553,7 +641,7 @@ function preSelectActionBasedOnTime() {
   // Show the hint about auto-selection
   const actionHint = document.getElementById('action-hint');
   if (actionHint && selectedAction) {
-    actionHint.textContent = `${selectedAction} automatically selected based on time of day (${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')})`;
+    actionHint.textContent = `${selectedAction} auto-selected based on time: ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
     actionHint.classList.add('visible');
     
     // Make it fade out after a few seconds
@@ -580,10 +668,10 @@ function showEmployeeActionScreen(employeeData) {
   }
   
   // Auto-select action based on time of day
-  preSelectActionBasedOnTime();
+  selectActionBasedOnTime();
   
-  // Activate the employee tab
-  activateTab('employee-tab');
+  // Show the employee section
+  showEmployeeSection();
 }
 
 // Add this function to update both counter badges
@@ -842,6 +930,26 @@ async function loadHistoryRecords() {
         
         // Update table with records
         updateHistoryTable(paginatedRecords);
+        
+        // After loading records, check for pending records
+        if (!showingOrgRecords) {
+            const pendingRecords = records.filter(record => record.syncStatus === 'pending');
+            if (pendingRecords.length > 0) {
+                const currentUser = firebase.auth().currentUser;
+                if (navigator.onLine) {
+                    if (currentUser) {
+                        // User is online and authenticated - can sync now
+                        showStatus(`You have ${pendingRecords.length} pending record${pendingRecords.length > 1 ? 's' : ''}. Click "Sync All Pending" to upload to the server.`, 'info', true);
+                    } else {
+                        // User is online but not authenticated - need to sign in
+                        showStatus(`You have ${pendingRecords.length} pending record${pendingRecords.length > 1 ? 's' : ''}. Sign in to access the upload feature.`, 'info', true);
+                    }
+                } else {
+                    // User is offline
+                    showStatus(`You have ${pendingRecords.length} pending record${pendingRecords.length > 1 ? 's' : ''}. Connect to internet and use History tab to upload them.`, 'info', true);
+                }
+            }
+        }
         
         // Hide loading state
         if (loadingElement) loadingElement.classList.add('hidden');
@@ -1198,6 +1306,27 @@ async function syncSingleRecord(record) {
 // Modified syncAllPendingRecords to use the shared button animation function
 async function syncAllPendingRecords() {
     try {
+        // Check if we're online
+        if (!navigator.onLine) {
+            showStatus('Cannot sync while offline. Please try again when online.', 'warning');
+            return;
+        }
+        
+        // Check if user is authenticated
+        const currentUser = firebase.auth().currentUser;
+        if (!currentUser) {
+            // Show login modal if available
+            const loginModal = document.getElementById('login-modal');
+            if (loginModal) {
+                loginModal.classList.remove('hidden');
+                setTimeout(() => {
+                    loginModal.classList.add('visible');
+                }, 10);
+            }
+            showStatus('Please sign in to sync records', 'info');
+            return;
+        }
+        
         // Get pending records count first
         const pendingRecords = await DB.getPendingRecords();
         
@@ -1256,31 +1385,64 @@ async function syncAllPendingRecords() {
     }
 }
 
-// Initialize setup when DOM is loaded
+// Initialize the employee section controls
 document.addEventListener('DOMContentLoaded', function() {
-    // Other initialization code...
+    // Set up employee section controls
+    const collapseEmployeeBtn = document.getElementById('collapse-employee-btn');
+    const cancelScanBtn = document.getElementById('cancel-scan-btn');
+    const submitActionBtn = document.getElementById('submit-action-btn');
     
-    // Set up History tab
-    setupHistoryTab();
+    // Hide employee section on collapse button click
+    if (collapseEmployeeBtn) {
+        collapseEmployeeBtn.addEventListener('click', hideEmployeeSection);
+    }
     
-    // Add tab change listener to load history when switching to that tab
-    const historyTabBtn = document.querySelector('[data-target="history-tab"]');
-    if (historyTabBtn) {
-        historyTabBtn.addEventListener('click', function() {
-            // Always reset the org records cache if it's been more than 30 seconds
-            if (showingOrgRecords && lastOrgFetchTime) {
-                const thirtySecondsAgo = Date.now() - (30 * 1000);
-                if (lastOrgFetchTime < thirtySecondsAgo) {
-                    // Clear cache to force refresh
-                    orgRecordsCache = null;
-                    lastOrgFetchTime = null;
-                }
-            }
-            
-            loadHistoryRecords();
+    // Cancel button handler
+    if (cancelScanBtn) {
+        cancelScanBtn.addEventListener('click', function() {
+            hideEmployeeSection();
+            resetScan();
         });
     }
+    
+    // Submit button handler
+    if (submitActionBtn) {
+        submitActionBtn.addEventListener('click', submitAttendanceRecord);
+    }
+    
+    // Make sure the employee section is hidden at startup
+    hideEmployeeSection();
 });
+
+// Helper function to hide the employee section
+function hideEmployeeSection() {
+    const employeeSection = document.getElementById('employee-section');
+    
+    if (employeeSection) {
+        employeeSection.classList.add('hidden');
+        employeeSection.classList.remove('slide-in');
+    }
+}
+
+// Function to reset scan after submission or cancel
+function resetScan() {
+    // Clear current employee data
+    currentEmployeeData = null;
+    
+    // Clear any selected radio button
+    const radios = document.querySelectorAll('input[name="time-action"]');
+    radios.forEach(radio => radio.checked = false);
+    
+    // Clear hint text
+    const hint = document.getElementById('action-hint');
+    if (hint) {
+        hint.textContent = '';
+        hint.classList.remove('visible');
+    }
+    
+    // Restart scanner
+    window.QrScanner.startScanner();
+}
 
 // Updated function to fix animation issue
 function updateSyncButtonState(isProcessing) {
@@ -1322,88 +1484,6 @@ function updateSyncButtonState(isProcessing) {
   }
 }
 
-// Enhanced network status indicator
-function updateNetworkStatus() {
-  const networkStatus = document.getElementById('network-status');
-  const networkText = networkStatus.querySelector('span');
-  const networkIcon = networkStatus.querySelector('i');
-  
-  // Add transition effect when status changes
-  const currentClass = networkStatus.className;
-  
-  // Check connection
-  const isOnline = navigator.onLine;
-  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-  
-  // Get effective connection speed if available
-  let connectionSpeed = 'unknown';
-  if (connection) {
-    connectionSpeed = connection.effectiveType || 'unknown';
-  }
-  
-  // Add status-changing class for animation
-  networkStatus.classList.add('status-changing');
-  
-  // Remove any existing signal strength indicator
-  const existingSignal = networkStatus.querySelector('.signal-strength');
-  if (existingSignal) {
-    networkStatus.removeChild(existingSignal);
-  }
-  
-  if (!isOnline) {
-    // Offline status
-    networkStatus.className = 'network-banner offline status-changing';
-    networkIcon.className = 'fas fa-ban';
-    networkText.textContent = 'Offline';
-    
-    // If we have pending records, show that info
-    DB.getPendingCount().then(count => {
-      if (count > 0) {
-        networkText.textContent = `Offline (${count} pending)`;
-      }
-    }).catch(err => console.error('Error getting pending count:', err));
-  } else if (connection && (connectionSpeed === 'slow-2g' || connectionSpeed === '2g')) {
-    // Limited connectivity
-    networkStatus.className = 'network-banner limited status-changing';
-    networkIcon.className = 'fas fa-exclamation-triangle';
-    networkText.textContent = 'Limited Connectivity';
-    
-    // Add signal strength indicator
-    const signalStrength = document.createElement('div');
-    signalStrength.className = 'signal-strength';
-    networkStatus.appendChild(signalStrength);
-  } else {
-    // Online with good connection
-    networkStatus.className = 'network-banner online status-changing';
-    networkIcon.className = 'fas fa-wifi';
-    
-    // Show connection quality if available
-    if (connectionSpeed && connectionSpeed !== 'unknown') {
-      if (connectionSpeed === '4g') {
-        networkText.textContent = 'Online (Excellent)';
-      } else if (connectionSpeed === '3g') {
-        networkText.textContent = 'Online (Good)';
-      } else {
-        networkText.textContent = 'Online';
-      }
-    } else {
-      networkText.textContent = 'Online';
-    }
-    
-    // Try to sync pending records when we come back online
-    syncPendingRecords()
-      .then(() => updatePendingRecordsCounter())
-      .catch(error => {
-        console.error('Error syncing pending records:', error);
-      });
-  }
-  
-  // Remove animation class after transition
-  setTimeout(() => {
-    networkStatus.classList.remove('status-changing');
-  }, 800);
-}
-
 // Periodically refresh org records if showing org tab
 function setupOrgRecordsAutoRefresh() {
     // Auto-refresh every 60 seconds if showing organization records
@@ -1437,9 +1517,6 @@ function setupOrgRecordsAutoRefresh() {
             }
         }
     }, AUTO_REFRESH_INTERVAL);
-    
-    // Call this in your initialization code
-    document.addEventListener('DOMContentLoaded', setupOrgRecordsAutoRefresh);
 }
 
 // Add this function to update refresh timestamp
@@ -1451,5 +1528,101 @@ function updateLastRefreshTime() {
         refreshTimeElem.textContent = `Last updated: ${timeStr}`;
         refreshTimeElem.classList.add('pulse');
         setTimeout(() => refreshTimeElem.classList.remove('pulse'), 1000);
+    }
+}
+
+// Initialize setup when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    // Set up History tab
+    setupHistoryTab();
+    
+    // Add tab change listener to load history when switching to that tab
+    const historyTabBtn = document.querySelector('[data-target="history-tab"]');
+    if (historyTabBtn) {
+        historyTabBtn.addEventListener('click', function() {
+            // Always reset the org records cache if it's been more than 30 seconds
+            if (showingOrgRecords && lastOrgFetchTime) {
+                const thirtySecondsAgo = Date.now() - (30 * 1000);
+                if (lastOrgFetchTime < thirtySecondsAgo) {
+                    // Clear cache to force refresh
+                    orgRecordsCache = null;
+                    lastOrgFetchTime = null;
+                }
+            }
+            
+            loadHistoryRecords();
+        });
+    }
+    
+    // Set up organization records auto-refresh
+    setupOrgRecordsAutoRefresh();
+});
+
+// Functions to handle auth UI updates
+function updateUIForLoggedInUser() {
+    // Update UI elements for logged in state
+    const loginBtn = document.getElementById('login-btn');
+    const userPanel = document.getElementById('user-panel');
+    const userEmail = document.getElementById('user-email');
+    const currentUser = firebase.auth().currentUser;
+    
+    if (loginBtn) loginBtn.classList.add('hidden');
+    if (userPanel) userPanel.classList.remove('hidden');
+    
+    // Update user info
+    if (userEmail && currentUser) {
+        userEmail.textContent = currentUser.email;
+    }
+    
+    // Update avatar
+    const avatarElement = document.querySelector('.user-avatar');
+    if (avatarElement && currentUser) {
+        if (currentUser.photoURL) {
+            avatarElement.innerHTML = `<img src="${currentUser.photoURL}" alt="User avatar">`;
+        } else {
+            avatarElement.innerHTML = '<i class="fas fa-user-circle"></i>';
+        }
+    }
+    
+    // Mark body as authenticated
+    document.body.classList.add('user-authenticated');
+    document.body.classList.remove('user-unauthenticated');
+    
+    // Show organization records button if needed
+    const orgRecordsBtn = document.getElementById('org-records-btn');
+    if (orgRecordsBtn) {
+        orgRecordsBtn.classList.remove('hidden');
+    }
+}
+
+function updateUIForLoggedOutUser() {
+    // Update UI elements for logged out state
+    const loginBtn = document.getElementById('login-btn');
+    const userPanel = document.getElementById('user-panel');
+    
+    if (loginBtn) loginBtn.classList.remove('hidden');
+    if (userPanel) userPanel.classList.add('hidden');
+    
+    // Mark body as unauthenticated
+    document.body.classList.remove('user-authenticated');
+    document.body.classList.add('user-unauthenticated');
+    
+    // If showing org records, switch back to local records
+    if (showingOrgRecords) {
+        showingOrgRecords = false;
+        const localRecordsBtn = document.getElementById('local-records-btn');
+        const orgRecordsBtn = document.getElementById('org-records-btn');
+        
+        if (localRecordsBtn) localRecordsBtn.classList.add('active');
+        if (orgRecordsBtn) {
+            orgRecordsBtn.classList.remove('active');
+            orgRecordsBtn.classList.add('hidden');
+        }
+        
+        // Reload history records if on history tab
+        const historyTab = document.getElementById('history-tab');
+        if (historyTab && historyTab.classList.contains('active')) {
+            loadHistoryRecords();
+        }
     }
 }

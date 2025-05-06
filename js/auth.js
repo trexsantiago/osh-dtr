@@ -154,6 +154,44 @@ document.addEventListener('DOMContentLoaded', function() {
             // Add class to body to enable authenticated features
             document.body.classList.add('user-authenticated');
             document.body.classList.remove('user-unauthenticated');
+            
+            // If we're online, attempt to upload any pending records
+            if (navigator.onLine) {
+                console.log('Checking for pending records to sync after login');
+                
+                // Use a small delay to ensure auth state fully applied
+                setTimeout(() => {
+                    // Access the DB and syncPendingRecords functions from global scope
+                    if (typeof DB !== 'undefined' && typeof syncPendingRecords === 'function') {
+                        // First check if there are pending records
+                        DB.getPendingCount().then(count => {
+                            if (count > 0) {
+                                console.log(`Found ${count} pending records to sync`);
+                                
+                                // Show status message about syncing
+                                if (typeof showStatus === 'function') {
+                                    showStatus('Signing in successful. Uploading pending records...', 'info');
+                                }
+                                
+                                // Sync all pending records
+                                syncPendingRecords().then(() => {
+                                    // Show success message
+                                    if (typeof showStatus === 'function') {
+                                        showStatus('Records uploaded successfully!', 'success');
+                                    }
+                                }).catch(error => {
+                                    console.error('Error syncing records after login:', error);
+                                    if (typeof showStatus === 'function') {
+                                        showStatus(`Some records could not be uploaded: ${error.message}`, 'warning');
+                                    }
+                                });
+                            }
+                        }).catch(err => {
+                            console.error('Error checking pending records after login:', err);
+                        });
+                    }
+                }, 500);
+            }
         } else {
             // User is signed out
             console.log('User is signed out');
@@ -164,7 +202,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (userEmail) userEmail.textContent = '';
             
             // Reset avatar to default icon
-            const avatarElement = userPanel.querySelector('.user-avatar');
+            const avatarElement = userPanel?.querySelector('.user-avatar');
             if (avatarElement) {
                 avatarElement.innerHTML = '<i class="fas fa-user-circle"></i>';
             }

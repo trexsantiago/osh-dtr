@@ -51,15 +51,11 @@
         </header>
 
         <main class="app-content">
-            <!-- Tab navigation -->
+            <!-- Modified Tab navigation - Remove Employee tab -->
             <div class="workflow-tabs">
                 <button class="tab-btn" data-target="scan-tab">
                     <i class="fas fa-qrcode"></i>
                     <span>Scan QR</span>
-                </button>
-                <button class="tab-btn" data-target="employee-tab">
-                    <i class="fas fa-user"></i>
-                    <span>Employee</span>
                 </button>
                 <button class="tab-btn" data-target="history-tab">
                     <i class="fas fa-history"></i>
@@ -68,7 +64,7 @@
                 </button>
             </div>
             
-            <!-- Tab contents -->
+            <!-- Modified Scan Tab with integrated employee section -->
             <div id="scan-tab" class="tab-content">
                 <div class="card">
                     <div class="card-header">
@@ -93,72 +89,75 @@
                     </div>
                 </div>
                 
-                <div class="status-card">
-                    <div id="status-message" class="info"></div>
-                </div>
-                <!-- Status message container -->
-                <div id="status-message" style="display: none;"></div>
-            </div>
-            
-            <!-- Employee Tab -->
-            <div id="employee-tab" class="tab-content">
-                <div class="card employee-card">
+                <!-- Integrated Employee section (initially hidden) -->
+                <div id="employee-section" class="card employee-card hidden">
                     <div class="card-header">
                         <h2><i class="fas fa-user"></i> Employee Details</h2>
+                        <button id="collapse-employee-btn" class="btn-icon">
+                            <i class="fas fa-chevron-up"></i>
+                        </button>
                     </div>
                     <div class="employee-details">
                         <!-- Will be populated by JavaScript after scanning -->
                     </div>
                     <div id="action-container">
                         <h3>Select Action</h3>
-                        <!-- Add this line for the hint -->
                         <div id="action-hint" class="hint-text"></div>
-                        <div class="action-options">
-                            <div class="action-option">
+                        
+                        <!-- Compact action options in a horizontal layout -->
+                        <div class="action-options-compact">
+                            <div class="action-option-compact">
                                 <input type="radio" name="time-action" id="time-in" value="IN">
-                                <label for="time-in">
+                                <label for="time-in" title="Time In">
                                     <i class="fas fa-sign-in-alt"></i>
-                                    Time In
+                                    <span>In</span>
                                 </label>
                             </div>
-                            <div class="action-option">
+                            <div class="action-option-compact">
                                 <input type="radio" name="time-action" id="lunch-out" value="LOUT">
-                                <label for="lunch-out">
+                                <label for="lunch-out" title="Lunch Out">
                                     <i class="fas fa-utensils"></i>
-                                    Lunch Out
+                                    <span>L-Out</span>
                                 </label>
                             </div>
-                            <div class="action-option">
+                            <div class="action-option-compact">
                                 <input type="radio" name="time-action" id="lunch-in" value="LIN">
-                                <label for="lunch-in">
+                                <label for="lunch-in" title="Lunch In">
                                     <i class="fas fa-utensils"></i>
-                                    Lunch In
+                                    <span>L-In</span>
                                 </label>
                             </div>
-                            <div class="action-option">
+                            <div class="action-option-compact">
                                 <input type="radio" name="time-action" id="time-out" value="OUT">
-                                <label for="time-out">
+                                <label for="time-out" title="Time Out">
                                     <i class="fas fa-sign-out-alt"></i>
-                                    Time Out
+                                    <span>Out</span>
                                 </label>
                             </div>
-                            <div class="action-option">
+                            <div class="action-option-compact">
                                 <input type="radio" name="time-action" id="univ-activity" value="UA">
-                                <label for="univ-activity">
+                                <label for="univ-activity" title="University Activity">
                                     <i class="fas fa-university"></i>
-                                    University Activity
+                                    <span>UA</span>
                                 </label>
                             </div>
                         </div>
+                        
+                        <!-- Inline action buttons -->
                         <div class="action-buttons">
-                            <button class="btn-primary">
+                            <button class="btn-primary" id="submit-action-btn">
                                 <i class="fas fa-check"></i> Submit
                             </button>
-                            <button class="btn-secondary" id="scan-again-btn">
-                                <i class="fas fa-redo"></i> Scan Again
+                            <button class="btn-secondary" id="cancel-scan-btn">
+                                <i class="fas fa-times"></i> Cancel
                             </button>
                         </div>
                     </div>
+                </div>
+                
+                <!-- Status card remains unchanged -->
+                <div class="status-card">
+                    <div id="status-message" class="info"></div>
                 </div>
             </div>
             

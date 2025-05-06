@@ -391,6 +391,7 @@ p {
   padding: var(--space-md);
   border-bottom: 1px solid var(--border-color);
   background-color: var(--background-dark);
+  position: relative;
 }
 
 .card-header h2 {
@@ -682,6 +683,8 @@ p {
   gap: var(--space-lg);
   align-items: center;
   border-bottom: 1px solid var(--border-color);
+  flex-direction: column;
+  gap: 8px;
 }
 
 .employee-photo {
@@ -717,6 +720,34 @@ p {
 
 .employee-details td {
   font-weight: 600;
+}
+
+.employee-details .employee-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.employee-details h4 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--primary-dark);
+}
+
+.employee-details p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-light);
+}
+
+/* Action container */
+#action-container {
+  padding: 0 16px 16px 16px;
+}
+
+#action-container h3 {
+  font-size: 1rem;
+  margin-bottom: 8px;
 }
 
 /* Action container */
@@ -1402,7 +1433,6 @@ p {
     display: flex;
     justify-content: flex-end;
     gap: 12px;
-    margin-top: 24px;
 }
 
 /* Hint text for auto selection */
@@ -1527,4 +1557,123 @@ button:disabled .fa-spinner {
 @keyframes pulse-fade {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
+}
+
+/* Integrated Employee Section */
+#employee-section {
+  margin-top: 16px;
+  transition: max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
+  border-top: 3px solid var(--primary-color);
+}
+
+#employee-section.hidden {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+#collapse-employee-btn {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+}
+
+/* Compact action options in a horizontal layout */
+.action-options-compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.action-option-compact {
+  position: relative;
+  flex: 1;
+  min-width: 60px;
+}
+
+.action-option-compact input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.action-option-compact label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+  background-color: var(--background-dark);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+  border: 2px solid transparent;
+  height: 100%;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.action-option-compact label:hover {
+  background-color: rgba(52, 152, 219, 0.1);
+}
+
+.action-option-compact input[type="radio"]:checked + label {
+  background-color: rgba(52, 152, 219, 0.2);
+  border-color: var(--primary-color);
+  color: var(--primary-dark);
+}
+
+.action-option-compact label i {
+  font-size: 1.25rem;
+  margin-bottom: 4px;
+  color: var(--primary-color);
+}
+
+.action-option-compact label span {
+  line-height: 1;
+}
+
+/* Simplified employee details */
+.employee-details {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Smooth scroll behavior */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Animation for showing employee section */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-in {
+  animation: slideDown 0.3s ease forwards;
+}
+
+/* Make sure buttons display nicely in a row */
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.action-buttons button {
+  flex: 1;
+  justify-content: center;
+  padding: 8px 16px;
 }

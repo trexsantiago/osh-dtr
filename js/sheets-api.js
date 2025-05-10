@@ -2,7 +2,7 @@
 
 const SheetsAPI = {
   // Update with your deployment URL
-  SHEET_URL: "https://script.google.com/a/macros/wpu.edu.ph/s/AKfycbyTdj6G2LWSPdXgvqvzLzaHqJ8r_Nx0YlW46WDObW0wHVGnmDAzYSWhfkTA9wWcceeW/exec",
+  SHEET_URL: "https://script.google.com/a/macros/wpu.edu.ph/s/AKfycbxsqTio0rsTdh-X0qfWrdxZNuI6oiOzvl9cQ_6KYIv6Unf1i7-eG7inGLYzsgjw3Yy49g/exec",
 
   async submitAttendance(record) {
     return new Promise((resolve, reject) => {

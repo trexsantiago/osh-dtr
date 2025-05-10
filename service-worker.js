@@ -3,11 +3,15 @@ const urlsToCache = [
   "./",
   "./index.html",
   "./css/style.css",
-  "./js/qr-scanner.js",
   "./js/app.js",
+  "./js/qr-scanner.js",
   "./js/auth.js",
   "./js/db.js",
   "./js/sheets-api.js",
+  "./js/firebase-config.js",
+  "./js/lib/firebase-app-compat.js",
+  "./js/lib/firebase-auth-compat.js",
+  "./js/lib/zxing.min.js",
   "./img/icons/icon-192x192.png",
   "./img/icons/icon-512x512.png"
 ];

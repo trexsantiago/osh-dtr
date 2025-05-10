@@ -1,3 +1,17 @@
+// Register the service worker for offline capabilities
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+    navigator.serviceWorker
+        .register("./service-worker.js")
+        .then((registration) => {
+        console.log("Service Worker registered with scope:", registration.scope);
+        })
+        .catch((error) => {
+        console.error("Service Worker registration failed:", error);
+        });
+    });
+}
+
 // Main Application Controller - Handles application-level functionality
 
 // Global variables for application state
